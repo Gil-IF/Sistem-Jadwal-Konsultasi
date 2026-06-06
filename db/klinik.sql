@@ -1,11 +1,11 @@
 -- phpMyAdmin SQL Dump
--- version 5.2.3
+-- version 5.2.0
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Jun 06, 2026 at 01:33 PM
--- Server version: 11.8.8-MariaDB-log
--- PHP Version: 8.3.30
+-- Generation Time: Jun 06, 2026 at 06:26 PM
+-- Server version: 12.2.2-MariaDB-log
+-- PHP Version: 8.1.10
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -42,7 +42,8 @@ CREATE TABLE `admins` (
 --
 
 INSERT INTO `admins` (`id`, `username`, `full_name`, `email`, `password_hash`, `created_at`, `is_active`) VALUES
-(1, 'admin1', 'Admin Utama', 'admin@klinik.com', '$2b$12$NWJTwXXyvvnZouL48HRe1OZVIApov7s0Lx1FnTcct8HoM8n.Wkkjm', '2026-06-05 09:32:08', 1);
+(1, 'admin1', 'Admin Utama', 'admin@klinik.com', '$2b$12$NWJTwXXyvvnZouL48HRe1OZVIApov7s0Lx1FnTcct8HoM8n.Wkkjm', '2026-06-05 09:32:08', 1),
+(2, 'admin2', 'Admin Baru', 'admin2@klinik.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '2026-06-06 23:40:52', 1);
 
 -- --------------------------------------------------------
 
@@ -64,7 +65,7 @@ CREATE TABLE `appointments` (
 --
 
 INSERT INTO `appointments` (`id`, `patient_id`, `slot_id`, `booking_time`, `status`, `notes`) VALUES
-(1, 1, 2, '2026-06-05 09:32:08', 'booked', 'Ingin konsultasi demam');
+(1, 1, 2, '2026-06-05 09:32:08', 'completed', 'Ingin konsultasi demam');
 
 -- --------------------------------------------------------
 
@@ -85,7 +86,8 @@ CREATE TABLE `doctors` (
 --
 
 INSERT INTO `doctors` (`id`, `full_name`, `specialization`, `license_number`, `is_active`) VALUES
-(1, 'dr. Andi Pratama', 'Dokter Umum', '1234567890', 1);
+(1, 'dr. Andi Pratama', 'Dokter Umum', '1234567890', 1),
+(2, 'dr. Eagan Rainmahasin', 'Dokter Mata', '313123', 1);
 
 -- --------------------------------------------------------
 
@@ -108,7 +110,10 @@ CREATE TABLE `patients` (
 --
 
 INSERT INTO `patients` (`id`, `full_name`, `email`, `phone`, `password_hash`, `created_at`, `updated_at`) VALUES
-(1, 'Budi Santoso', 'budi@email.com', '08123456789', '$2b$12$Zc5Eivw/hwtU/53wp2iOyeS.8NFskmuo13S.FIwP5IZrg1k1J9hLm', '2026-06-05 09:32:08', '2026-06-05 09:43:31');
+(1, 'Budi Santoso', 'budi@email.com', '08123456789', '$2b$12$Zc5Eivw/hwtU/53wp2iOyeS.8NFskmuo13S.FIwP5IZrg1k1J9hLm', '2026-06-05 09:32:08', '2026-06-05 09:43:31'),
+(2, 'Hendra Lesmana', 'hendraalim@gmail.com', '082143454637', '$2y$10$BFNdxjfWyP9aqDbFkoyZ9ubsxcNMtaVdQjerT5.QGiNV8tbSSTsSC', '2026-06-07 00:13:05', '2026-06-07 00:13:05'),
+(3, 'Bambang', 'bambangalim@gmail.com', '083839717338', '$2y$10$1yb3MS7zbeqEIXTS8lcATuFCNml2IqZdORMfS4/5BfKihMZ8AwnFa', '2026-06-07 00:15:16', '2026-06-07 00:15:16'),
+(4, 'Pisang', 'pisangkuning@gmail.com', '0823323221', '$2y$10$hLV2UKOYg0LYRqLbdA04leZgArqEJSQYExEAD1NalzcHwjwKoUjA2', '2026-06-07 00:53:25', '2026-06-07 00:53:25');
 
 -- --------------------------------------------------------
 
@@ -187,7 +192,7 @@ ALTER TABLE `time_slots`
 -- AUTO_INCREMENT for table `admins`
 --
 ALTER TABLE `admins`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `appointments`
@@ -199,13 +204,13 @@ ALTER TABLE `appointments`
 -- AUTO_INCREMENT for table `doctors`
 --
 ALTER TABLE `doctors`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `patients`
 --
 ALTER TABLE `patients`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `time_slots`

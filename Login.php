@@ -5,7 +5,10 @@ if (isset($_SESSION['user_id'])) {
     redirect(BASE_URL . ($_SESSION['role'] === 'admin' ? '/admin/index.php' : '/user/index.php'));
 }
 
-$error = '';
+$flash = getFlash();
+$error = ($flash && $flash['type'] === 'error')
+    ? $flash['msg']
+    : '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $identity = trim($_POST['identity'] ?? '');
@@ -41,9 +44,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect(BASE_URL . '/user/index.php');
         }
 
-        $error = 'Email/username atau password salah.';
+        setFlash('error', 'Email/username atau password salah.');
+        redirect(BASE_URL . '/login.php');
     } else {
-        $error = 'Harap isi email/username dan password.';
+        setFlash('error', 'Harap isi email/username dan password.');
+        redirect(BASE_URL . '/login.php');
     }
 }
 ?>

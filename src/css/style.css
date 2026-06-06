@@ -140,6 +140,18 @@
     transition: transform .25s ease;
 }
 
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 999;
+}
+
+.sidebar-overlay.show {
+    display: block;
+}
+
 .sidebar-brand {
     padding: 1.25rem 1.5rem;
     font-size: 1.1rem;
@@ -252,4 +264,10 @@
     .sidebar { transform: translateX(-100%); }
     .sidebar.show { transform: translateX(0); }
     .main-content { margin-left: 0; }
+}
+
+@media (min-width: 769px) {
+    .sidebar-overlay {
+        display: none !important;
+    }
 }
