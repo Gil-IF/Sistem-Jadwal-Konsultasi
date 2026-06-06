@@ -1,9 +1,9 @@
 <?php
 // session_start();
 
-$host    = 'localhost';
-$db      = 'klinik';
-$user    = 'root';
+$host    = '';
+$db      = '';
+$user    = '';
 $pass    = '';
 $charset = 'utf8mb4';
 
