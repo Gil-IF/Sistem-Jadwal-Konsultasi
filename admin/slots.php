@@ -22,8 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             setFlash('error', 'Semua field wajib diisi.');
         }
+
     } elseif ($action === 'bulk_add') {
-        // Tambah slot berulang dalam rentang tanggal
         $doctor_id  = (int)$_POST['doctor_id'];
         $start_date = $_POST['start_date'] ?? '';
         $end_date   = $_POST['end_date']   ?? '';
@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $duration   = (int)($_POST['duration_minutes'] ?? 30);
 
         if ($doctor_id && $start_date && $end_date && $start_time && $end_time && $duration > 0) {
-            $added = 0;
+            $added   = 0;
             $current = new DateTime($start_date);
             $last    = new DateTime($end_date);
 
@@ -54,12 +54,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             setFlash('error', 'Semua field wajib diisi.');
         }
+
     } elseif ($action === 'delete') {
-        $id = (int)$_POST['id'];
-        // Cek belum di-booking
-        $booked = $pdo->prepare("SELECT is_booked FROM time_slots WHERE id=?")->execute([$id]);
-        $slot   = $pdo->prepare("SELECT is_booked FROM time_slots WHERE id=?")->execute([$id]);
-        $check  = $pdo->prepare("SELECT is_booked FROM time_slots WHERE id=?");
+        $id    = (int)$_POST['id'];
+        $check = $pdo->prepare("SELECT is_booked FROM time_slots WHERE id=?");
         $check->execute([$id]);
         $row = $check->fetch();
         if ($row && $row['is_booked']) {
@@ -69,6 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             setFlash('success', 'Slot dihapus.');
         }
     }
+
     redirect(BASE_URL . '/admin/slots.php');
 }
 
@@ -80,7 +79,7 @@ $doctors = $pdo->query("SELECT id, full_name FROM doctors WHERE is_active=1 ORDE
 $filterDoctor = (int)($_GET['doctor_id'] ?? 0);
 $filterDate   = $_GET['date'] ?? '';
 
-$where = "WHERE 1=1";
+$where  = "WHERE 1=1";
 $params = [];
 if ($filterDoctor) { $where .= " AND ts.doctor_id = ?"; $params[] = $filterDoctor; }
 if ($filterDate)   { $where .= " AND DATE(ts.slot_datetime) = ?"; $params[] = $filterDate; }
@@ -118,10 +117,13 @@ $slots = $stmt->fetchAll();
         <button type="submit" class="btn btn-sm btn-outline-primary w-100">Filter</button>
       </div>
       <div class="col-sm-3 text-end">
-        <button class="btn btn-sm btn-primary me-1" data-bs-toggle="modal" data-bs-target="#addModal">
+        <!-- FIX: tambah type="button" agar tidak trigger submit form GET -->
+        <button type="button" class="btn btn-sm btn-primary me-1"
+                data-bs-toggle="modal" data-bs-target="#addModal">
           <i class="bi bi-plus"></i> Tambah Slot
         </button>
-        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bulkModal">
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                data-bs-toggle="modal" data-bs-target="#bulkModal">
           <i class="bi bi-calendar-range"></i> Bulk
         </button>
       </div>
@@ -129,11 +131,19 @@ $slots = $stmt->fetchAll();
   </div>
 </div>
 
+<!-- Tabel Slot -->
 <div class="card table-card">
   <div class="table-responsive">
     <table class="table table-hover">
       <thead>
-        <tr><th>#</th><th>Dokter</th><th>Tanggal & Waktu</th><th>Durasi</th><th>Status</th><th>Aksi</th></tr>
+        <tr>
+          <th>#</th>
+          <th>Dokter</th>
+          <th>Tanggal & Waktu</th>
+          <th>Durasi</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
       </thead>
       <tbody>
       <?php foreach ($slots as $s): ?>
@@ -153,7 +163,9 @@ $slots = $stmt->fetchAll();
                 onsubmit="return confirm('Hapus slot ini?')">
             <input type="hidden" name="action" value="delete">
             <input type="hidden" name="id" value="<?= $s['id'] ?>">
-            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            <button class="btn btn-sm btn-outline-danger">
+              <i class="bi bi-trash"></i>
+            </button>
           </form>
           <?php else: ?>
           <span class="text-muted small">–</span>
@@ -162,7 +174,9 @@ $slots = $stmt->fetchAll();
       </tr>
       <?php endforeach; ?>
       <?php if (!$slots): ?>
-      <tr><td colspan="6" class="text-center text-muted py-4">Belum ada slot</td></tr>
+      <tr>
+        <td colspan="6" class="text-center text-muted py-4">Belum ada slot</td>
+      </tr>
       <?php endif; ?>
       </tbody>
     </table>
@@ -194,7 +208,8 @@ $slots = $stmt->fetchAll();
         </div>
         <div class="mb-3">
           <label class="form-label">Durasi (menit)</label>
-          <input type="number" name="duration_minutes" class="form-control" value="30" min="10" max="120">
+          <input type="number" name="duration_minutes" class="form-control"
+                 value="30" min="10" max="120">
         </div>
       </div>
       <div class="modal-footer">
@@ -246,11 +261,13 @@ $slots = $stmt->fetchAll();
         </div>
         <div class="mb-3">
           <label class="form-label">Durasi per Slot (menit)</label>
-          <input type="number" name="duration_minutes" class="form-control" value="30" min="10" max="120">
+          <input type="number" name="duration_minutes" class="form-control"
+                 value="30" min="10" max="120">
         </div>
         <div class="alert alert-info py-2 small">
           <i class="bi bi-info-circle me-1"></i>
-          Slot akan dibuat setiap <strong>N menit</strong> dari jam mulai hingga jam selesai, untuk setiap hari dalam rentang tanggal.
+          Slot akan dibuat setiap <strong>N menit</strong> dari jam mulai hingga jam selesai,
+          untuk setiap hari dalam rentang tanggal.
         </div>
       </div>
       <div class="modal-footer">

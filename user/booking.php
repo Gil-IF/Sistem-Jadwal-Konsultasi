@@ -50,8 +50,6 @@ $doctors = $pdo->query(
      ORDER BY d.full_name"
 )->fetchAll();
 
-var_dump($doctors);
-
 $selectedDoctor = (int)($_GET['doctor_id'] ?? 0);
 $selectedDate   = $_GET['date'] ?? '';
 
