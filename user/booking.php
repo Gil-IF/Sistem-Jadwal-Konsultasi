@@ -58,7 +58,7 @@ if ($selectedDoctor) {
     $w = "WHERE ts.doctor_id = ? AND ts.is_booked = 0 AND ts.slot_datetime > NOW()";
     $p = [$selectedDoctor];
     if ($selectedDate) { $w .= " AND DATE(ts.slot_datetime) = ?"; $p[] = $selectedDate; }
-    $s = $pdo->prepare("SELECT * FROM time_slots $w ORDER BY ts.slot_datetime");
+    $s = $pdo->prepare("SELECT * FROM time_slots ts $w ORDER BY ts.slot_datetime");
     $s->execute($p);
     $slots = $s->fetchAll();
 }
@@ -92,9 +92,8 @@ if ($selectedDoctor) {
                    min="<?= date('Y-m-d') ?>"
                    onchange="this.form.submit()">
           </div>
-          <?php if ($selectedDoctor): ?>
-          <input type="hidden" name="doctor_id" value="<?= $selectedDoctor ?>">
-          <?php endif; ?>
+          <!-- FIX: hidden input doctor_id dihapus karena duplikat dengan <select>
+               dan menyebabkan nilai select selalu ditimpa. -->
         </form>
       </div>
     </div>
