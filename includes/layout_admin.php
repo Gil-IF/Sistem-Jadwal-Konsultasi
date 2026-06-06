@@ -1,7 +1,7 @@
 <?php
 // Dipanggil di awal setiap halaman admin.
 // Variabel yang diharapkan: $pageTitle (string)
-// requireLogin('admin');
+requireLogin('admin');
 $flash = getFlash();
 $currentPage = basename($_SERVER['PHP_SELF']);
 ?>

@@ -7,45 +7,45 @@ if (isset($_SESSION['user_id'])) {
 
 $error = '';
 
-// if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-//     $identity = trim($_POST['identity'] ?? '');
-//     $password  = $_POST['password'] ?? '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $identity = trim($_POST['identity'] ?? '');
+    $password  = $_POST['password'] ?? '';
 
-//     if ($identity && $password) {
-//         $stmt = $pdo->prepare(
-//             "SELECT id, full_name, password_hash FROM admins
-//              WHERE (username = :i OR email = :i2) AND is_active = 1 LIMIT 1"
-//         );
-//         $stmt->execute(['i' => $identity, 'i2' => $identity]);
-//         $admin = $stmt->fetch();
+    if ($identity && $password) {
+        $stmt = $pdo->prepare(
+            "SELECT id, full_name, password_hash FROM admins
+             WHERE (username = :i OR email = :i2) AND is_active = 1 LIMIT 1"
+        );
+        $stmt->execute(['i' => $identity, 'i2' => $identity]);
+        $admin = $stmt->fetch();
 
-//         if ($admin && password_verify($password, $admin['password_hash'])) {
-//             session_regenerate_id(true);
-//             $_SESSION['user_id']   = $admin['id'];
-//             $_SESSION['full_name'] = $admin['full_name'];
-//             $_SESSION['role']      = 'admin';
-//             redirect(BASE_URL . '/admin/index.php');
-//         }
+        if ($admin && password_verify($password, $admin['password_hash'])) {
+            session_regenerate_id(true);
+            $_SESSION['user_id']   = $admin['id'];
+            $_SESSION['full_name'] = $admin['full_name'];
+            $_SESSION['role']      = 'admin';
+            redirect(BASE_URL . '/admin/index.php');
+        }
 
-//         $stmt2 = $pdo->prepare(
-//             "SELECT id, full_name, password_hash FROM patients WHERE email = :email LIMIT 1"
-//         );
-//         $stmt2->execute(['email' => $identity]);
-//         $patient = $stmt2->fetch();
+        $stmt2 = $pdo->prepare(
+            "SELECT id, full_name, password_hash FROM patients WHERE email = :email LIMIT 1"
+        );
+        $stmt2->execute(['email' => $identity]);
+        $patient = $stmt2->fetch();
 
-//         if ($patient && password_verify($password, $patient['password_hash'])) {
-//             session_regenerate_id(true);
-//             $_SESSION['user_id']   = $patient['id'];
-//             $_SESSION['full_name'] = $patient['full_name'];
-//             $_SESSION['role']      = 'patient';
-//             redirect(BASE_URL . '/user/index.php');
-//         }
+        if ($patient && password_verify($password, $patient['password_hash'])) {
+            session_regenerate_id(true);
+            $_SESSION['user_id']   = $patient['id'];
+            $_SESSION['full_name'] = $patient['full_name'];
+            $_SESSION['role']      = 'patient';
+            redirect(BASE_URL . '/user/index.php');
+        }
 
-//         $error = 'Email/username atau password salah.';
-//     } else {
-//         $error = 'Harap isi email/username dan password.';
-//     }
-// }
+        $error = 'Email/username atau password salah.';
+    } else {
+        $error = 'Harap isi email/username dan password.';
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -63,16 +63,16 @@ $error = '';
     <div class="auth-card">
         <div class="auth-left">
             <img src="./src/img/Hospital.png" alt="Logo">
-            <h5>Konsul, yuk!</h5>
-            <p>Sistem Jadwal Konsultasi</p>
+            <h5>AntriSehat</h5>
+            <p>Sistem Jadwal Konsultasi Dokter</p>
         </div>
         <div class="auth-right">
             <?php if ($error): ?>
-                <div class="alert alert-danger alert-dismissible fade show py-2" role="alert">
-                    <i class="bi bi-exclamation-circle me-1"></i>
-                    <?= htmlspecialchars($error) ?>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
+                <script>
+                    document.addEventListener('DOMContentLoaded', () => {
+                        showErrorPopup('<?= htmlspecialchars($error, ENT_QUOTES) ?>');
+                    });
+                </script>
             <?php endif; ?>
 
             <h5 class="fw-bold mb-1">Selamat Datang</h5>
@@ -135,6 +135,57 @@ $error = '';
         authLeft.style.setProperty('--x', (e.clientX - rect.left) + 'px');
         authLeft.style.setProperty('--y', (e.clientY - rect.top) + 'px');
     });
+    function showErrorPopup(msg) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position:fixed; inset:0; background:rgba(0,0,0,0);
+            display:flex; align-items:center; justify-content:center; z-index:9999;
+            transition: background 0.3s ease;
+        `;
+
+        overlay.innerHTML = `
+            <div id="popupBox" style="
+                background:#fff; border-radius:1rem; padding:2rem; max-width:340px;
+                width:90%; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.2);
+                transform: scale(0.7) translateY(30px); opacity:0;
+                transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s ease;
+            ">
+                <div style="font-size:2.5rem; margin-bottom:1rem;">⚠️</div>
+                <h6 style="font-weight:700; margin-bottom:.5rem;">Login Gagal</h6>
+                <p style="color:#64748b; font-size:.9rem; margin-bottom:1.5rem;">${msg}</p>
+                <button id="popupBtn"
+                    style="background:#3b69ff; color:#fff; border:none; border-radius:.5rem;
+                        padding:.6rem 2rem; font-weight:600; cursor:pointer; width:100%;
+                        transition: background 0.2s;">
+                    OK
+                </button>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        // Fungsi tutup dengan animasi keluar
+        function closePopup() {
+            const box = document.getElementById('popupBox');
+            overlay.style.background = 'rgba(75, 10, 10, 0.3)';
+            box.style.transform = 'scale(0.7) translateY(30px)';
+            box.style.opacity = '0';
+            setTimeout(() => overlay.remove(), 300);
+        }
+
+        // Animasi masuk
+        requestAnimationFrame(() => {
+            overlay.style.background = 'rgba(75, 10, 10, 0.3)';
+            const box = document.getElementById('popupBox');
+            requestAnimationFrame(() => {
+                box.style.transform = 'scale(1) translateY(0)';
+                box.style.opacity = '1';
+            });
+        });
+
+        document.getElementById('popupBtn').addEventListener('click', closePopup);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) closePopup(); });
+    }
 </script>
 </body>
 </html>
