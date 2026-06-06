@@ -1,10 +1,10 @@
 <?php
-session_start();
+// session_start();
 
 $host    = 'localhost';
 $db      = 'klinik';
 $user    = 'root';
-$pass    = 'admin123';
+$pass    = '';
 $charset = 'utf8mb4';
 
 $dsn     = "mysql:host=$host;dbname=$db;charset=$charset";
@@ -14,11 +14,11 @@ $options = [
     PDO::ATTR_EMULATE_PREPARES   => false,
 ];
 
-try {
-    $pdo = new PDO($dsn, $user, $pass, $options);
-} catch (PDOException $e) {
-    die("Koneksi gagal: " . $e->getMessage());
-}
+// try {
+//     $pdo = new PDO($dsn, $user, $pass, $options);
+// } catch (PDOException $e) {
+//     die("Koneksi gagal: " . $e->getMessage());
+// }
 
 // Helper: cek login
 function requireLogin(string $role = ''): void {

@@ -1,5 +1,5 @@
 <?php
-requireLogin('patient');
+// requireLogin('patient');
 $flash = getFlash();
 $currentPage = basename($_SERVER['PHP_SELF']);
 ?>
