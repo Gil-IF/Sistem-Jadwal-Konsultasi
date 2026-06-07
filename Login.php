@@ -106,6 +106,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <i class="bi bi-eye" id="eyeIcon"></i>
                         </button>
                     </div>
+                    <!-- TAMBAHAN LINK LUPA PASSWORD -->
+                    <div class="text-end mt-2">
+                        <a href="<?= BASE_URL ?>/forgotpassword.php" class="text-decoration-none small">Lupa password?</a>
+                    </div>
                 </div>
                 <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
                     <i class="bi bi-box-arrow-in-right me-1"></i> Masuk

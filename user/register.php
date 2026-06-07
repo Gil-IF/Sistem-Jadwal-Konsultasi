@@ -83,7 +83,7 @@ $error = ($flash && $flash['type'] === 'error') ? $flash['msg'] : '';
                     </div>
                     <h5 class="fw-bold mt-3">Registrasi Berhasil!</h5>
                     <p class="text-muted small mb-4">Akun kamu sudah siap digunakan.</p>
-                    <a href="<?= BASE_URL ?>/Login.php" class="btn btn-primary w-100 py-2 fw-semibold">
+                    <a href="<?= BASE_URL ?>/login.php" class="btn btn-primary w-100 py-2 fw-semibold">
                         <i class="bi bi-box-arrow-in-right me-1"></i> Login Sekarang
                     </a>
                 </div>

@@ -3,8 +3,8 @@ session_start();
 
 $host    = 'localhost';
 $db      = 'klinik';
-$user    = 'eagan';
-$pass    = 'eagangmr123';
+$user    = 'root';
+$pass    = 'admin123';
 $charset = 'utf8mb4';
 
 $dsn     = "mysql:host=$host;dbname=$db;charset=$charset";

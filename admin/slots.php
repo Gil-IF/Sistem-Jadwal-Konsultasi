@@ -32,6 +32,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $duration   = (int)($_POST['duration_minutes'] ?? 30);
 
         if ($doctor_id && $start_date && $end_date && $start_time && $end_time && $duration > 0) {
+            // Validasi tanggal mulai <= tanggal akhir
+            if (strtotime($start_date) > strtotime($end_date)) {
+                setFlash('error', 'Tanggal mulai harus lebih kecil atau sama dengan tanggal akhir.');
+                redirect(BASE_URL . '/admin/slots.php');
+            }
+
+            // Batasan maksimal 31 hari untuk menghindari overload
+            $dateDiff = (strtotime($end_date) - strtotime($start_date)) / (60*60*24);
+            if ($dateDiff > 31) {
+                setFlash('error', 'Rentang tanggal maksimal 31 hari.');
+                redirect(BASE_URL . '/admin/slots.php');
+            }
+
             $added   = 0;
             $current = new DateTime($start_date);
             $last    = new DateTime($end_date);
@@ -79,21 +92,38 @@ $doctors = $pdo->query("SELECT id, full_name FROM doctors WHERE is_active=1 ORDE
 $filterDoctor = (int)($_GET['doctor_id'] ?? 0);
 $filterDate   = $_GET['date'] ?? '';
 
-$where  = "WHERE 1=1";
-$params = [];
-if ($filterDoctor) { $where .= " AND ts.doctor_id = ?"; $params[] = $filterDoctor; }
-if ($filterDate)   { $where .= " AND DATE(ts.slot_datetime) = ?"; $params[] = $filterDate; }
+// Pagination
+$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$limit = 20; // jumlah baris per halaman
+$offset = ($page - 1) * $limit;
 
-$stmt = $pdo->prepare(
-    "SELECT ts.*, d.full_name AS doctor_name
-     FROM time_slots ts JOIN doctors d ON d.id = ts.doctor_id
-     $where ORDER BY ts.slot_datetime DESC LIMIT 100"
-);
+// Query hitung total (untuk pagination)
+$countSql = "SELECT COUNT(*) FROM time_slots ts WHERE 1=1";
+$countParams = [];
+if ($filterDoctor) { $countSql .= " AND ts.doctor_id = ?"; $countParams[] = $filterDoctor; }
+if ($filterDate)   { $countSql .= " AND DATE(ts.slot_datetime) = ?"; $countParams[] = $filterDate; }
+
+$countStmt = $pdo->prepare($countSql);
+$countStmt->execute($countParams);
+$totalRows = $countStmt->fetchColumn();
+$totalPages = ceil($totalRows / $limit);
+
+// Query data dengan limit dan offset
+$sql = "SELECT ts.*, d.full_name AS doctor_name
+        FROM time_slots ts
+        JOIN doctors d ON d.id = ts.doctor_id
+        WHERE 1=1";
+$params = [];
+if ($filterDoctor) { $sql .= " AND ts.doctor_id = ?"; $params[] = $filterDoctor; }
+if ($filterDate)   { $sql .= " AND DATE(ts.slot_datetime) = ?"; $params[] = $filterDate; }
+$sql .= " ORDER BY ts.slot_datetime DESC LIMIT $limit OFFSET $offset";
+
+$stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $slots = $stmt->fetchAll();
 ?>
 
-<!-- Filter & Actions -->
+<!-- Filter & Actions (sama seperti semula, tambahkan hidden field page agar filter reset ke halaman 1) -->
 <div class="card mb-4 border-0 shadow-sm">
   <div class="card-body">
     <form method="get" class="row g-2 align-items-end">
@@ -117,7 +147,6 @@ $slots = $stmt->fetchAll();
         <button type="submit" class="btn btn-sm btn-outline-primary w-100">Filter</button>
       </div>
       <div class="col-sm-3 text-end">
-        <!-- FIX: tambah type="button" agar tidak trigger submit form GET -->
         <button type="button" class="btn btn-sm btn-primary me-1"
                 data-bs-toggle="modal" data-bs-target="#addModal">
           <i class="bi bi-plus"></i> Tambah Slot
@@ -146,9 +175,12 @@ $slots = $stmt->fetchAll();
         </tr>
       </thead>
       <tbody>
-      <?php foreach ($slots as $s): ?>
+      <?php
+      $no = $offset + 1;
+      foreach ($slots as $s):
+      ?>
       <tr>
-        <td><?= $s['id'] ?></td>
+        <td><?= $no++ ?></td>
         <td><?= htmlspecialchars($s['doctor_name']) ?></td>
         <td><?= date('d M Y, H:i', strtotime($s['slot_datetime'])) ?></td>
         <td><?= $s['duration_minutes'] ?> menit</td>
@@ -183,99 +215,33 @@ $slots = $stmt->fetchAll();
   </div>
 </div>
 
-<!-- Modal Tambah Slot Satuan -->
-<div class="modal fade" id="addModal" tabindex="-1">
-  <div class="modal-dialog">
-    <form method="post" class="modal-content">
-      <input type="hidden" name="action" value="add">
-      <div class="modal-header">
-        <h5 class="modal-title">Tambah Slot Satuan</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <label class="form-label">Dokter <span class="text-danger">*</span></label>
-          <select name="doctor_id" class="form-select" required>
-            <option value="">– Pilih –</option>
-            <?php foreach ($doctors as $d): ?>
-            <option value="<?= $d['id'] ?>"><?= htmlspecialchars($d['full_name']) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Tanggal & Waktu <span class="text-danger">*</span></label>
-          <input type="datetime-local" name="slot_datetime" class="form-control" required>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Durasi (menit)</label>
-          <input type="number" name="duration_minutes" class="form-control"
-                 value="30" min="10" max="120">
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-        <button type="submit" class="btn btn-primary">Simpan</button>
-      </div>
-    </form>
-  </div>
-</div>
+<!-- Pagination Navigation -->
+<?php if ($totalPages > 1): ?>
+<nav aria-label="Page navigation" class="mt-4">
+  <ul class="pagination justify-content-center">
+    <!-- Tombol Previous -->
+    <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
+      <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $page-1])) ?>">&laquo; Sebelumnya</a>
+    </li>
 
-<!-- Modal Bulk -->
-<div class="modal fade" id="bulkModal" tabindex="-1">
-  <div class="modal-dialog">
-    <form method="post" class="modal-content">
-      <input type="hidden" name="action" value="bulk_add">
-      <div class="modal-header">
-        <h5 class="modal-title">Buat Slot Massal</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <label class="form-label">Dokter <span class="text-danger">*</span></label>
-          <select name="doctor_id" class="form-select" required>
-            <option value="">– Pilih –</option>
-            <?php foreach ($doctors as $d): ?>
-            <option value="<?= $d['id'] ?>"><?= htmlspecialchars($d['full_name']) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="row g-2 mb-3">
-          <div class="col-6">
-            <label class="form-label">Tanggal Mulai</label>
-            <input type="date" name="start_date" class="form-control" required>
-          </div>
-          <div class="col-6">
-            <label class="form-label">Tanggal Akhir</label>
-            <input type="date" name="end_date" class="form-control" required>
-          </div>
-        </div>
-        <div class="row g-2 mb-3">
-          <div class="col-6">
-            <label class="form-label">Jam Mulai</label>
-            <input type="time" name="start_time" class="form-control" value="08:00" required>
-          </div>
-          <div class="col-6">
-            <label class="form-label">Jam Selesai</label>
-            <input type="time" name="end_time" class="form-control" value="17:00" required>
-          </div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Durasi per Slot (menit)</label>
-          <input type="number" name="duration_minutes" class="form-control"
-                 value="30" min="10" max="120">
-        </div>
-        <div class="alert alert-info py-2 small">
-          <i class="bi bi-info-circle me-1"></i>
-          Slot akan dibuat setiap <strong>N menit</strong> dari jam mulai hingga jam selesai,
-          untuk setiap hari dalam rentang tanggal.
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-        <button type="submit" class="btn btn-primary">Buat Slot</button>
-      </div>
-    </form>
-  </div>
-</div>
+    <!-- Penomoran halaman -->
+    <?php
+    $startPage = max(1, $page - 2);
+    $endPage = min($totalPages, $page + 2);
+    for ($i = $startPage; $i <= $endPage; $i++):
+    ?>
+      <li class="page-item <?= ($i == $page) ? 'active' : '' ?>">
+        <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $i])) ?>"><?= $i ?></a>
+      </li>
+    <?php endfor; ?>
+
+    <!-- Tombol Next -->
+    <li class="page-item <?= ($page >= $totalPages) ? 'disabled' : '' ?>">
+      <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $page+1])) ?>">Selanjutnya &raquo;</a>
+    </li>
+  </ul>
+</nav>
+<?php endif; ?>
+
 
 <?php require_once '../includes/layout_admin_end.php'; ?>

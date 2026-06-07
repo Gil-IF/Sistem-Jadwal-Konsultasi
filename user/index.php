@@ -5,6 +5,7 @@ require_once '../includes/layout_user.php';
 
 $patientId = $_SESSION['user_id'];
 
+// Ambil janji mendatang (sudah aman)
 $upcoming = $pdo->prepare(
     "SELECT a.id, d.full_name AS doctor, d.specialization,
             ts.slot_datetime, ts.duration_minutes, a.status, a.notes
@@ -17,14 +18,38 @@ $upcoming = $pdo->prepare(
 $upcoming->execute([$patientId]);
 $upcomings = $upcoming->fetchAll();
 
-$total = $pdo->prepare("SELECT COUNT(*) FROM appointments WHERE patient_id=?")->execute([$patientId]);
+// --- PERBAIKAN: semua statistik menggunakan prepared statement ---
+// 1. Janji mendatang (upcoming)
+$stmtUp = $pdo->prepare(
+    "SELECT COUNT(*) FROM appointments a 
+     JOIN time_slots ts ON ts.id = a.slot_id 
+     WHERE a.patient_id = ? AND a.status = 'booked' AND ts.slot_datetime >= NOW()"
+);
+$stmtUp->execute([$patientId]);
+$upcomingCount = $stmtUp->fetchColumn();
+
+// 2. Janji selesai (completed)
+$stmtComp = $pdo->prepare(
+    "SELECT COUNT(*) FROM appointments WHERE patient_id = ? AND status = 'completed'"
+);
+$stmtComp->execute([$patientId]);
+$completedCount = $stmtComp->fetchColumn();
+
+// 3. Janji dibatalkan (cancelled)
+$stmtCanc = $pdo->prepare(
+    "SELECT COUNT(*) FROM appointments WHERE patient_id = ? AND status = 'cancelled'"
+);
+$stmtCanc->execute([$patientId]);
+$cancelledCount = $stmtCanc->fetchColumn();
+
 $stats = [
-    'upcoming'  => $pdo->prepare("SELECT COUNT(*) FROM appointments a JOIN time_slots ts ON ts.id=a.slot_id WHERE a.patient_id=? AND a.status='booked' AND ts.slot_datetime>=NOW()")->execute([$patientId]) ? $pdo->query("SELECT COUNT(*) FROM appointments a JOIN time_slots ts ON ts.id=a.slot_id WHERE a.patient_id=$patientId AND a.status='booked' AND ts.slot_datetime>=NOW()")->fetchColumn() : 0,
-    'completed' => $pdo->query("SELECT COUNT(*) FROM appointments WHERE patient_id=$patientId AND status='completed'")->fetchColumn(),
-    'cancelled' => $pdo->query("SELECT COUNT(*) FROM appointments WHERE patient_id=$patientId AND status='cancelled'")->fetchColumn(),
+    'upcoming'  => $upcomingCount,
+    'completed' => $completedCount,
+    'cancelled' => $cancelledCount,
 ];
 ?>
 
+<!-- HTML SAMA (tidak berubah) -->
 <div class="row g-3 mb-4">
   <div class="col-sm-4">
     <div class="card stat-card p-3">

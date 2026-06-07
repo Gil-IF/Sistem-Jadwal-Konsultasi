@@ -28,6 +28,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$pid]);
         $row = $stmt->fetch();
 
+        // 🔧 PERBAIKAN: cek apakah user ditemukan
+        if (!$row) {
+            setFlash('error', 'Akun tidak ditemukan. Silakan login kembali.');
+            session_destroy();
+            redirect(BASE_URL . '/login.php');
+        }
+
         if (!password_verify($old, $row['password_hash'])) {
             setFlash('error', 'Password lama salah.');
         } elseif (strlen($new) < 6) {
@@ -46,9 +53,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 require_once '../includes/layout_user.php';
 
+// Ambil data pasien
 $patient = $pdo->prepare("SELECT * FROM patients WHERE id=?");
 $patient->execute([$_SESSION['user_id']]);
 $patient = $patient->fetch();
+
+// 🔧 PERBAIKAN: jika pasien tidak ditemukan, logout dan redirect
+if (!$patient) {
+    session_destroy();
+    setFlash('error', 'Sesi tidak valid. Silakan login kembali.');
+    redirect(BASE_URL . '/login.php');
+}
 ?>
 
 <div class="row g-4">
