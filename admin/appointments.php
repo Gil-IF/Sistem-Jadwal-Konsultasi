@@ -38,7 +38,7 @@ $stmt = $pdo->prepare(
      JOIN time_slots ts ON ts.id = a.slot_id
      JOIN doctors d     ON d.id  = ts.doctor_id
      $where
-     ORDER BY ts.slot_datetime DESC"
+     ORDER BY ts.slot_datetime ASC"
 );
 $stmt->execute($params);
 $appointments = $stmt->fetchAll();

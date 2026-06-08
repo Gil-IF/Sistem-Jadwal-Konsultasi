@@ -19,7 +19,7 @@ $recent = $pdo->query(
      JOIN patients p   ON p.id = a.patient_id
      JOIN time_slots ts ON ts.id = a.slot_id
      JOIN doctors d    ON d.id  = ts.doctor_id
-     ORDER BY a.booking_time DESC LIMIT 5"
+     ORDER BY a.booking_time ASC LIMIT 5"
 )->fetchAll();
 ?>
 

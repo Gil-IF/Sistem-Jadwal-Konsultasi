@@ -4,7 +4,7 @@ session_start();
 $host    = 'localhost';
 $db      = 'klinikterbaru';
 $user    = 'root';
-$pass    = '';
+$pass    = 'admin123';
 $charset = 'utf8mb4';
 
 $dsn     = "mysql:host=$host;dbname=$db;charset=$charset";
