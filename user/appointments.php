@@ -37,7 +37,16 @@ $p   = $filterStatus ? [$pid, $filterStatus] : [$pid];
 $stmt = $pdo->prepare(
     "SELECT a.id, a.status, a.notes, a.booking_time,
             d.full_name AS doctor, d.specialization,
-            ts.slot_datetime, ts.duration_minutes
+            ts.slot_datetime, ts.duration_minutes,
+            (
+                SELECT COUNT(*)
+                FROM time_slots ts2
+                WHERE ts2.doctor_id = ts.doctor_id
+                  AND DATE(ts2.slot_datetime) = DATE(ts.slot_datetime)
+                  AND HOUR(ts2.slot_datetime) >= IF(HOUR(ts.slot_datetime) >= 13, 13, 7)
+                  AND HOUR(ts2.slot_datetime) <  IF(HOUR(ts.slot_datetime) >= 13, 17, 12)
+                  AND ts2.slot_datetime <= ts.slot_datetime
+            ) AS queue_number
      FROM appointments a
      JOIN time_slots ts ON ts.id = a.slot_id
      JOIN doctors d     ON d.id  = ts.doctor_id
@@ -65,7 +74,7 @@ $appointments = $stmt->fetchAll();
   <div class="table-responsive">
     <table class="table table-hover">
       <thead>
-        <tr><th>#</th><th>Dokter</th><th>Jadwal</th><th>Durasi</th><th>Catatan</th><th>Status</th><th>Aksi</th></tr>
+        <tr><th>#</th><th>Dokter</th><th>Jadwal</th><th>No. Antrian</th><th>Catatan</th><th>Status</th><th>Aksi</th></tr>
       </thead>
       <tbody>
       <?php foreach ($appointments as $a): ?>
@@ -76,7 +85,7 @@ $appointments = $stmt->fetchAll();
           <small class="text-muted"><?= htmlspecialchars($a['specialization'] ?? '') ?></small>
         </td>
         <td><?= date('d M Y, H:i', strtotime($a['slot_datetime'])) ?></td>
-        <td><?= $a['duration_minutes'] ?> menit</td>
+        <td><span class="badge bg-primary rounded-pill fs-6"><?= $a['queue_number'] ?></span></td>
         <td class="text-muted small"><?= htmlspecialchars($a['notes'] ?? '-') ?></td>
         <td>
           <span class="badge rounded-pill badge-<?= $a['status'] ?>">
