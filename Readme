@@ -1,0 +1,37 @@
+# Sistem Jadwal Konsultasi Kesehatan
+
+Aplikasi web untuk mengelola jadwal konsultasi kesehatan antara admin, dokter, dan pasien.  
+Sistem ini mendukung login/logout, manajemen data, booking jadwal, dan pengelolaan appointment.
+
+---
+
+## Teknologi yang Digunakan
+
+- PHP Native
+- MySQL / MariaDB
+- PDO
+- Bootstrap 5
+- phpMyAdmin
+
+---
+
+## Persyaratan Sistem
+
+Sebelum menjalankan project, pastikan sudah terpasang:
+
+- Laragon / XAMPP
+- PHP 8.x atau lebih baru
+- MySQL / MariaDB
+- phpMyAdmin
+- Browser (Chrome / Edge / Firefox)
+
+---
+
+## Cara Menjalankan Aplikasi
+
+### 1. Letakkan Project ke Folder Web Server
+
+Jika menggunakan **Laragon**, simpan project ke:
+
+```txt
+C:\laragon\www\Sistem-jadwal-konsultasi
