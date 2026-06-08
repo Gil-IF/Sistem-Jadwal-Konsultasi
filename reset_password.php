@@ -66,11 +66,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="<?= BASE_URL ?>/src/css/style.css">
+    <link rel="icon" type="image/png" href="./src/img/logo.png">
 </head>
 <body>
 <div class="auth-wrapper">
-    <div class="auth-card" style="max-width: 500px;">
-        <div class="auth-left" style="flex: 0.8;">
+    <div class="auth-card" style="max-width: 720px;">
+        <div class="auth-left">
             <img src="./src/img/Hospital.png" alt="Logo">
             <h5>AntriSehat</h5>
             <p>Reset Password</p>
