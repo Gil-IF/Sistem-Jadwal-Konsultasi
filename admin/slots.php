@@ -2,35 +2,68 @@
 require_once '../config/config.php';
 $pageTitle = 'Manajemen Slot Waktu';
 
+// ── Helper ────────────────────────────────────────────────────────────────────
+function generateSlots($pdo, $doctor_id, $date, $session, $max_slots) {
+    $duration = 30;
+    if ($session === 'pagi') {
+        $start_h = 7; $end_h = 12; $start_time = '07:00';
+    } else {
+        $start_h = 13; $end_h = 17; $start_time = '13:00';
+    }
+
+    // Hapus slot kosong di sesi ini saja
+    $pdo->prepare(
+        "DELETE FROM time_slots
+         WHERE doctor_id = ? AND DATE(slot_datetime) = ?
+           AND HOUR(slot_datetime) >= ? AND HOUR(slot_datetime) < ?
+           AND is_booked = 0"
+    )->execute([$doctor_id, $date, $start_h, $end_h]);
+
+    // Hitung yang sudah booked (tidak bisa dihapus)
+    $s = $pdo->prepare(
+        "SELECT COUNT(*) FROM time_slots
+         WHERE doctor_id = ? AND DATE(slot_datetime) = ?
+           AND HOUR(slot_datetime) >= ? AND HOUR(slot_datetime) < ?
+           AND is_booked = 1"
+    );
+    $s->execute([$doctor_id, $date, $start_h, $end_h]);
+    $booked_count = (int)$s->fetchColumn();
+
+    $t      = new DateTime($date . ' ' . $start_time);
+    $target = max($max_slots, $booked_count);
+    $added  = 0;
+
+    while ($added < $target) {
+        $ins = $pdo->prepare(
+            "INSERT IGNORE INTO time_slots (doctor_id, slot_datetime, duration_minutes) VALUES (?,?,?)"
+        );
+        $ins->execute([$doctor_id, $t->format('Y-m-d H:i:s'), $duration]);
+        if ($ins->rowCount() > 0) $added++;
+        $t->modify("+{$duration} minutes");
+    }
+}
+
 // ── POST handler ──────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireLogin('admin');
     $action = $_POST['action'] ?? '';
 
-    // Edit sesi: aktifkan/nonaktifkan + set jumlah slot
     if ($action === 'edit_session') {
-        $doctor_id  = (int)$_POST['doctor_id'];
-        $date       = $_POST['date'] ?? '';
-        $session    = $_POST['session'] ?? ''; // pagi / siang
-        $is_active  = (int)($_POST['is_active'] ?? 0);
-        $max_slots  = max(1, (int)($_POST['max_slots'] ?? 15));
+        $doctor_id = (int)$_POST['doctor_id'];
+        $date      = $_POST['date'] ?? '';
+        $session   = $_POST['session'] ?? '';
+        $is_active = (int)($_POST['is_active'] ?? 0);
+        $max_slots = max(1, min(5, (int)($_POST['max_slots'] ?? 5))); // maks 5
 
         if (!$doctor_id || !$date || !in_array($session, ['pagi','siang'])) {
             setFlash('error', 'Data tidak valid.');
             redirect(BASE_URL . '/admin/slots.php?date=' . $date);
         }
 
-        // Tentukan jam sesi
-        if ($session === 'pagi') {
-            $start_h = 7; $end_h = 12;
-            $start_time = '07:00'; $duration = 30;
-        } else {
-            $start_h = 13; $end_h = 17;
-            $start_time = '13:00'; $duration = 30;
-        }
+        if ($session === 'pagi') { $start_h = 7;  $end_h = 12; }
+        else                     { $start_h = 13; $end_h = 17; }
 
         if (!$is_active) {
-            // Nonaktifkan: hapus semua slot yang belum di-booked di sesi ini
             $pdo->prepare(
                 "DELETE FROM time_slots
                  WHERE doctor_id = ? AND DATE(slot_datetime) = ?
@@ -39,43 +72,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             )->execute([$doctor_id, $date, $start_h, $end_h]);
             setFlash('success', 'Sesi dinonaktifkan.');
         } else {
-            // Aktifkan / update: hapus semua slot kosong lalu generate ulang dari awal
-            // Ini memastikan slot selalu mulai dari jam awal sesi dan tidak melewati batas
-            $pdo->prepare(
-                "DELETE FROM time_slots
-                 WHERE doctor_id = ? AND DATE(slot_datetime) = ?
-                   AND HOUR(slot_datetime) >= ? AND HOUR(slot_datetime) < ?
-                   AND is_booked = 0"
-            )->execute([$doctor_id, $date, $start_h, $end_h]);
-
-            // Hitung berapa slot sudah di-booked (tidak bisa dihapus), sisanya kita isi
-            $stmt = $pdo->prepare(
-                "SELECT COUNT(*) FROM time_slots
-                 WHERE doctor_id = ? AND DATE(slot_datetime) = ?
-                   AND HOUR(slot_datetime) >= ? AND HOUR(slot_datetime) < ?
-                   AND is_booked = 1"
-            );
-            $stmt->execute([$doctor_id, $date, $start_h, $end_h]);
-            $booked_count = (int)$stmt->fetchColumn();
-
-            // Generate slot mulai dari awal sesi, skip yang sudah booked
-            $t = new DateTime($date . ' ' . $start_time);
-            $end_limit = new DateTime($date . ' ' . ($session === 'pagi' ? '12:00' : '17:00'));
-            $added = 0;
-            $target = max($max_slots, $booked_count); // jangan kurang dari yang sudah booked
-
-            while ($added < $target && $t < $end_limit) {
-                try {
-                    $pdo->prepare(
-                        "INSERT IGNORE INTO time_slots (doctor_id, slot_datetime, duration_minutes) VALUES (?,?,?)"
-                    )->execute([$doctor_id, $t->format('Y-m-d H:i:s'), $duration]);
-                    $added++;
-                } catch (PDOException) {}
-                $t->modify("+{$duration} minutes");
-            }
+            generateSlots($pdo, $doctor_id, $date, $session, $max_slots);
             setFlash('success', 'Sesi berhasil diperbarui.');
         }
 
+        redirect(BASE_URL . '/admin/slots.php?date=' . $date);
+
+    } elseif ($action === 'activate_all') {
+        $date = $_POST['date'] ?? '';
+        if (!$date) { redirect(BASE_URL . '/admin/slots.php'); }
+
+        $doctors_list = $pdo->query(
+            "SELECT id FROM doctors WHERE is_active=1 AND deleted_at IS NULL"
+        )->fetchAll(PDO::FETCH_COLUMN);
+
+        foreach ($doctors_list as $did) {
+            generateSlots($pdo, $did, $date, 'pagi',  5);
+            generateSlots($pdo, $did, $date, 'siang', 5);
+        }
+
+        setFlash('success', 'Semua sesi diaktifkan dengan 5 slot.');
         redirect(BASE_URL . '/admin/slots.php?date=' . $date);
     }
 
@@ -88,15 +104,10 @@ $doctors = $pdo->query(
     "SELECT id, full_name, specialization FROM doctors WHERE is_active=1 AND deleted_at IS NULL ORDER BY full_name"
 )->fetchAll();
 
-// Tanggal yang ditampilkan — default hari ini, fix empty string dari URL
 $selectedDate = (isset($_GET['date']) && $_GET['date'] !== '') ? $_GET['date'] : date('Y-m-d');
-$isPastDate   = $selectedDate < date('Y-m-d'); // tanggal sudah lewat, mode view only
-
-// Filter dokter
+$isPastDate   = $selectedDate < date('Y-m-d');
 $filterDoctor = (int)($_GET['doctor_id'] ?? 0);
 
-// ── Query: semua dokter × 2 sesi, LEFT JOIN ke slot ──────────────────────────
-// Hasilnya selalu muncul semua dokter (aktif/nonaktif sesi)
 $docWhere = $filterDoctor ? "AND d.id = $filterDoctor" : "";
 $sql = "
     SELECT
@@ -121,13 +132,10 @@ $sql = "
     GROUP BY d.id, d.full_name, d.specialization, sesi_list.sesi
     ORDER BY d.full_name, sesi_list.sesi
 ";
-
 $stmt = $pdo->prepare($sql);
 $stmt->execute([$selectedDate]);
 $rows = $stmt->fetchAll();
 
-// ── Untuk popup Detail: ambil pasien per dokter per sesi ─────────────────────
-// Kita simpan dalam array [doctor_id][sesi] = [list appointment]
 $detailData = [];
 $dSql = "
     SELECT
@@ -159,7 +167,6 @@ $dSql = "
 $dParams = [$selectedDate];
 if ($filterDoctor) { $dSql .= " AND d.id = ?"; $dParams[] = $filterDoctor; }
 $dSql .= " ORDER BY ts.slot_datetime";
-
 $dStmt = $pdo->prepare($dSql);
 $dStmt->execute($dParams);
 foreach ($dStmt->fetchAll() as $r) {
@@ -168,70 +175,39 @@ foreach ($dStmt->fetchAll() as $r) {
 ?>
 
 <style>
-/* ── Layout & filter bar ── */
 .filter-bar { background:#fff; border-radius:1rem; padding:1rem 1.25rem; box-shadow:0 1px 6px rgba(0,0,0,.07); margin-bottom:1.5rem; }
 .date-label { font-size:.75rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.05em; }
-
-/* ── Table ── */
 .slot-table th { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; border-bottom:2px solid #f1f5f9; padding:.6rem 1rem; }
 .slot-table td { padding:.75rem 1rem; vertical-align:middle; border-bottom:1px solid #f8fafc; }
 .slot-table tbody tr:hover { background:#f8faff; }
-
-/* Sesi badge */
 .sesi-badge { display:inline-flex; align-items:center; gap:.35rem; font-size:.78rem; font-weight:600; padding:.25em .7em; border-radius:.4rem; }
 .sesi-pagi  { background:#fef9c3; color:#a16207; }
 .sesi-siang { background:#dbeafe; color:#1d4ed8; }
-
-/* Slot bar */
 .slot-bar-wrap { display:flex; align-items:center; gap:.6rem; }
 .slot-bar { height:6px; border-radius:3px; background:#e2e8f0; flex:1; max-width:80px; overflow:hidden; }
 .slot-bar-fill { height:100%; border-radius:3px; background:#3b69ff; transition:width .3s; }
 .slot-bar-fill.danger { background:#ef4444; }
 .slot-text { font-size:.82rem; font-weight:700; color:#1e293b; white-space:nowrap; }
-
-/* Action buttons */
 .btn-action { border:1.5px solid #e2e8f0; background:#fff; border-radius:.5rem; padding:.3rem .65rem; font-size:.78rem; font-weight:600; transition:all .15s; cursor:pointer; }
 .btn-action:hover { border-color:#3b69ff; color:#3b69ff; background:#f0f4ff; }
 .btn-action.detail { border-color:#e2e8f0; color:#64748b; }
 .btn-action.detail:hover { border-color:#10b981; color:#10b981; background:#f0fdf4; }
-
-/* ── Modal ── */
-.admin-overlay {
-    position:fixed; inset:0; background:rgba(0,0,0,0); z-index:1050;
-    display:flex; align-items:center; justify-content:center; padding:1rem;
-    transition:background .25s; pointer-events:none; opacity:0;
-}
+.admin-overlay { position:fixed; inset:0; background:rgba(0,0,0,0); z-index:1050; display:flex; align-items:center; justify-content:center; padding:1rem; transition:background .25s; pointer-events:none; opacity:0; }
 .admin-overlay.show { background:rgba(0,0,0,.45); pointer-events:all; opacity:1; }
-.admin-modal {
-    background:#fff; border-radius:1.25rem; width:100%; max-width:460px;
-    box-shadow:0 20px 60px rgba(0,0,0,.18);
-    transform:translateY(20px) scale(.96); opacity:0;
-    transition:transform .3s cubic-bezier(.34,1.56,.64,1), opacity .25s;
-    max-height:85vh; overflow-y:auto;
-}
+.admin-modal { background:#fff; border-radius:1.25rem; width:100%; max-width:460px; box-shadow:0 20px 60px rgba(0,0,0,.18); transform:translateY(20px) scale(.96); opacity:0; transition:transform .3s cubic-bezier(.34,1.56,.64,1), opacity .25s; max-height:85vh; overflow-y:auto; }
 .admin-modal.show { transform:translateY(0) scale(1); opacity:1; }
-.admin-modal-header {
-    padding:1.1rem 1.4rem; border-bottom:1px solid #f1f5f9;
-    display:flex; justify-content:space-between; align-items:center;
-    position:sticky; top:0; background:#fff; z-index:1;
-}
+.admin-modal-header { padding:1.1rem 1.4rem; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:#fff; z-index:1; }
 .admin-modal-body { padding:1.25rem 1.4rem; }
-
-/* Edit modal toggle */
 .toggle-row { display:flex; align-items:center; justify-content:space-between; padding:.6rem 0; border-bottom:1px solid #f1f5f9; margin-bottom:.75rem; }
 .form-switch-lg .form-check-input { width:2.5em; height:1.3em; cursor:pointer; }
-
-/* Detail modal list */
 .patient-item { border:1px solid #f1f5f9; border-radius:.75rem; padding:.75rem 1rem; margin-bottom:.6rem; }
 .patient-item:last-child { margin-bottom:0; }
 .queue-num { width:28px; height:28px; border-radius:50%; background:#3b69ff; color:#fff; font-size:.75rem; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-
-/* Empty state */
 .empty-state { text-align:center; padding:3rem 1rem; color:#94a3b8; }
 .empty-state i { font-size:2.5rem; margin-bottom:.75rem; display:block; }
 </style>
 
-<!-- ── Filter Bar ─────────────────────────────────────────────────────────── -->
+<!-- Filter Bar -->
 <div class="filter-bar d-flex align-items-end gap-3 flex-wrap">
     <div>
         <div class="date-label mb-1">Tanggal</div>
@@ -259,22 +235,20 @@ foreach ($dStmt->fetchAll() as $r) {
             <?= count(array_filter($rows, fn($r) => (int)$r['total_slots'] > 0)) ?> sesi aktif
             <?php endif; ?>
         </div>
+        <?php if (!$isPastDate): ?>
+        <button class="btn btn-sm btn-success mt-1" onclick="confirmActivateAll()">
+            <i class="bi bi-lightning-fill me-1"></i>Aktifkan Semua
+        </button>
+        <?php endif; ?>
     </div>
 </div>
 
-<!-- ── Table ──────────────────────────────────────────────────────────────── -->
+<!-- Table -->
 <div class="card border-0 shadow-sm">
     <div class="table-responsive">
         <table class="table slot-table mb-0">
             <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Dokter</th>
-                    <th>Sesi</th>
-                    <th>Slot</th>
-                    <th>Status</th>
-                    <th>Aksi</th>
-                </tr>
+                <tr><th>#</th><th>Dokter</th><th>Sesi</th><th>Slot</th><th>Status</th><th>Aksi</th></tr>
             </thead>
             <tbody>
             <?php if ($rows): ?>
@@ -307,8 +281,7 @@ foreach ($dStmt->fetchAll() as $r) {
                     <?php if ($active): ?>
                     <div class="slot-bar-wrap">
                         <div class="slot-bar">
-                            <div class="slot-bar-fill <?= $isFull ? 'danger' : '' ?>"
-                                 style="width:<?= $pct ?>%"></div>
+                            <div class="slot-bar-fill <?= $isFull ? 'danger' : '' ?>" style="width:<?= $pct ?>%"></div>
                         </div>
                         <span class="slot-text"><?= $booked ?>/<?= $total ?></span>
                     </div>
@@ -330,15 +303,16 @@ foreach ($dStmt->fetchAll() as $r) {
                 <td>
                     <div class="d-flex gap-1 align-items-center">
                         <?php if ($isPastDate): ?>
-                        <span class="text-muted small fst-italic me-1"><i class="bi bi-lock me-1"></i>View only</span>
+                        <span class="text-muted small fst-italic"><i class="bi bi-lock me-1"></i>View only</span>
                         <?php else: ?>
                         <button class="btn-action"
                             onclick='openEdit(<?= $r["doctor_id"] ?>, <?= json_encode($r["doctor_name"]) ?>, <?= json_encode($r["sesi"]) ?>, <?= $total ?>)'>
                             <i class="bi bi-pencil me-1"></i>Edit
                         </button>
                         <?php endif; ?>
-                        <button class="btn-action detail" <?= !$active ? 'disabled style="opacity:.4;cursor:not-allowed;"' : '' ?>
-                            onclick='<?= $active ? "openDetail(".json_encode($r["doctor_name"]).", ".json_encode($r["sesi"]).", ".json_encode($detailList).")" : "" ?>'>
+                        <button class="btn-action detail"
+                                <?= !$active ? 'disabled style="opacity:.4;cursor:not-allowed;"' : '' ?>
+                                onclick='<?= $active ? "openDetail(".json_encode($r["doctor_name"]).", ".json_encode($r["sesi"]).", ".json_encode($detailList).")" : "" ?>'>
                             <i class="bi bi-people me-1"></i>Detail
                         </button>
                     </div>
@@ -346,22 +320,21 @@ foreach ($dStmt->fetchAll() as $r) {
             </tr>
             <?php endforeach; ?>
             <?php else: ?>
-            <tr>
-                <td colspan="6">
-                    <div class="empty-state">
-                        <i class="bi bi-calendar-x"></i>
-                        Tidak ada dokter aktif.
-                    </div>
-                </td>
-            </tr>
+            <tr><td colspan="6"><div class="empty-state"><i class="bi bi-calendar-x"></i>Tidak ada dokter aktif.</div></td></tr>
             <?php endif; ?>
             </tbody>
         </table>
     </div>
 </div>
 
+<?php if (!$isPastDate): ?>
+<form method="post" id="activateAllForm" style="display:none;">
+    <input type="hidden" name="action" value="activate_all">
+    <input type="hidden" name="date" value="<?= htmlspecialchars($selectedDate) ?>">
+</form>
+<?php endif; ?>
 
-<!-- ══ Modal Edit Sesi ══════════════════════════════════════════════════════ -->
+<!-- Modal Edit -->
 <div class="admin-overlay" id="editOverlay">
     <div class="admin-modal" id="editModal">
         <div class="admin-modal-header">
@@ -380,8 +353,6 @@ foreach ($dStmt->fetchAll() as $r) {
                 <input type="hidden" name="date" id="edit_date">
                 <input type="hidden" name="doctor_id" id="edit_doctor_id">
                 <input type="hidden" name="session" id="edit_session">
-
-                <!-- Toggle aktif -->
                 <div class="toggle-row">
                     <div>
                         <div class="fw-semibold small">Aktifkan Sesi</div>
@@ -392,19 +363,16 @@ foreach ($dStmt->fetchAll() as $r) {
                                onchange="toggleSlotInput(this.checked)">
                     </div>
                 </div>
-
-                <!-- Jumlah slot -->
                 <div id="slotCountWrap" style="display:none;">
-                    <label class="form-label small fw-semibold mt-2">Jumlah Slot</label>
+                    <label class="form-label small fw-semibold mt-2">Jumlah Slot (maks 5)</label>
                     <div class="d-flex align-items-center gap-2">
-                        <input type="range" name="max_slots" id="slotRange" min="1" max="30" value="15"
+                        <input type="range" name="max_slots" id="slotRange" min="1" max="5" value="5"
                                class="form-range flex-1" oninput="document.getElementById('slotVal').textContent=this.value">
-                        <span class="fw-bold text-primary" id="slotVal" style="min-width:28px;">15</span>
+                        <span class="fw-bold text-primary" id="slotVal" style="min-width:20px;">5</span>
                         <span class="text-muted small">slot</span>
                     </div>
                     <div class="text-muted" style="font-size:.72rem;">Slot dibuat otomatis mulai jam awal sesi, interval 30 menit</div>
                 </div>
-
                 <button type="submit" class="btn btn-primary w-100 mt-3 fw-semibold">
                     <i class="bi bi-check2-circle me-1"></i>Simpan
                 </button>
@@ -413,7 +381,7 @@ foreach ($dStmt->fetchAll() as $r) {
     </div>
 </div>
 
-<!-- ══ Modal Detail ══════════════════════════════════════════════════════════ -->
+<!-- Modal Detail -->
 <div class="admin-overlay" id="detailOverlay">
     <div class="admin-modal" id="detailModal">
         <div class="admin-modal-header">
@@ -426,13 +394,18 @@ foreach ($dStmt->fetchAll() as $r) {
                 <i class="bi bi-x"></i>
             </button>
         </div>
-        <div class="admin-modal-body" id="detailBody">
-        </div>
+        <div class="admin-modal-body" id="detailBody"></div>
     </div>
 </div>
 
 <script>
 const PAGE_DATE = '<?= $selectedDate ?>';
+
+function confirmActivateAll() {
+    if (confirm('Aktifkan semua sesi (Pagi & Siang) untuk semua dokter pada ' + PAGE_DATE + ' dengan 5 slot masing-masing?\n\nSlot kosong yang ada akan di-reset.')) {
+        document.getElementById('activateAllForm').submit();
+    }
+}
 
 function gotoDate(date) {
     const d = date || document.getElementById('dateInput').value;
@@ -442,39 +415,33 @@ function gotoDate(date) {
     window.location.href = url;
 }
 
-// ── Edit Modal ──────────────────────────────────────────────────────────────
 function openEdit(doctorId, doctorName, sesi, currentSlots) {
     document.getElementById('editTitle').textContent    = 'Edit Sesi';
     document.getElementById('editSubtitle').textContent = doctorName + ' – ' + ucfirst(sesi);
-    document.getElementById('edit_date').value       = PAGE_DATE;
-    document.getElementById('edit_doctor_id').value  = doctorId;
-    document.getElementById('edit_session').value    = sesi;
-
+    document.getElementById('edit_date').value      = PAGE_DATE;
+    document.getElementById('edit_doctor_id').value = doctorId;
+    document.getElementById('edit_session').value   = sesi;
     const toggle = document.getElementById('toggleAktif');
     toggle.checked = currentSlots > 0;
     toggleSlotInput(toggle.checked);
-
     const range = document.getElementById('slotRange');
-    range.value = currentSlots > 0 ? currentSlots : 15;
+    range.value = currentSlots > 0 ? Math.min(currentSlots, 5) : 5;
     document.getElementById('slotVal').textContent = range.value;
-
     showModal('editOverlay', 'editModal');
 }
 
 function toggleSlotInput(checked) {
     document.getElementById('slotCountWrap').style.display = checked ? '' : 'none';
 }
+function closeEdit()   { hideModal('editOverlay',   'editModal');   }
+function closeDetail() { hideModal('detailOverlay', 'detailModal'); }
 
-function closeEdit() { hideModal('editOverlay', 'editModal'); }
-
-// ── Detail Modal ────────────────────────────────────────────────────────────
 function openDetail(doctorName, sesi, patients) {
     document.getElementById('detailTitle').textContent    = 'Detail Sesi ' + ucfirst(sesi);
     document.getElementById('detailSubtitle').textContent = doctorName + ' – ' + PAGE_DATE;
-
     const body = document.getElementById('detailBody');
     if (!patients || patients.length === 0) {
-        body.innerHTML = `<div class="empty-state"><i class="bi bi-person-x"></i>Belum ada pasien yang booking di sesi ini.</div>`;
+        body.innerHTML = '<div class="empty-state"><i class="bi bi-person-x"></i>Belum ada pasien di sesi ini.</div>';
     } else {
         body.innerHTML = patients.map(p => `
             <div class="patient-item d-flex gap-3 align-items-start">
@@ -482,19 +449,14 @@ function openDetail(doctorName, sesi, patients) {
                 <div class="flex-1">
                     <div class="fw-semibold" style="font-size:.88rem;">${escHtml(p.patient_name)}</div>
                     <div class="text-muted small">${escHtml(p.phone || '–')} &bull; ${p.waktu}</div>
-                    ${p.notes ? `<div class="mt-1 small text-secondary">"${escHtml(p.notes)}"</div>` : ''}
+                    ${p.notes ? '<div class="mt-1 small text-secondary">"' + escHtml(p.notes) + '"</div>' : ''}
                     <span class="badge mt-1 ${p.status === 'completed' ? 'bg-success' : 'bg-primary'} rounded-pill" style="font-size:.68rem;">${ucfirst(p.status)}</span>
                 </div>
-            </div>
-        `).join('');
+            </div>`).join('');
     }
-
     showModal('detailOverlay', 'detailModal');
 }
 
-function closeDetail() { hideModal('detailOverlay', 'detailModal'); }
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
 function showModal(overlayId, modalId) {
     document.getElementById(overlayId).classList.add('show');
     requestAnimationFrame(() => requestAnimationFrame(() =>
@@ -510,13 +472,7 @@ function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// Tutup klik di luar modal
-['editOverlay','detailOverlay'].forEach(id => {
-    document.getElementById(id).addEventListener('click', e => {
-        if (e.target.id === id) e.target.classList.contains('show') && e.target.click === undefined || hideModal(id, id.replace('Overlay','Modal'));
-    });
-});
-document.getElementById('editOverlay').addEventListener('click', e => { if (e.target === document.getElementById('editOverlay')) closeEdit(); });
+document.getElementById('editOverlay').addEventListener('click',   e => { if (e.target === document.getElementById('editOverlay'))   closeEdit();   });
 document.getElementById('detailOverlay').addEventListener('click', e => { if (e.target === document.getElementById('detailOverlay')) closeDetail(); });
 </script>
 
